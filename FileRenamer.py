@@ -1,9 +1,9 @@
-
 import os 
 import datetime
 from contextlib import contextmanager
 import time
-
+import re
+import random
 
 crtdate_rename = False
 mdfdate_rename = False
@@ -17,131 +17,138 @@ def cd(newdir):
     finally:
         os.chdir(prevdir)
 
+def atoi(text):
+    return int(text) if text.isdigit() else text
+
+def natural_keys(text):
+    '''alist.sort(key=natural_keys) sorts in human order http://nedbatchelder.com/blog/200712/human_sorting.html    '''
+    return [ atoi(c) for c in re.split(r'(\d+)', text) ]
+
+
+def file_only_blacklist():
+    list = [i.strip() for i in input("\nInput the names of files you would like to blacklist seperated by \" / \"(ex a.txt / b.png)\n").split("/") if i.strip() != ""]
+    return list, []
+    print(list)
+
+def filetype_only_blacklist():
+    list = [i.strip() for i in input("\nInput the names of filetypes you would like to blacklist seperated by \" / \" (ex .txt / .png)\n").split("/") if i.strip() != ""]
+    print(list)
+    return [], list
+
+def file_filetype_blacklist():
+    return file_only_blacklist()[0], filetype_only_blacklist()[1]
+
+def rename_date_created(dir, file, new_name):
+    file = "\\".join([dir, file])
+    new_name = os.stat(file).st_ctime
+    return file, new_name
+    print(file)
+
+def rename_date_modified(dir, file, new_name):
+    file = "\\".join([dir, file])
+    new_name = os.stat(file).st_mtime
+    return file, new_name
+    print(file)
+
+def rename_as_provided(dir, file, new_name):
+    file = "\\".join([dir, file])
+    new_name = "\\".join([dir, new_name])
+    return file, new_name
+    print(file)
+    print(new_name)
+
+rename_functins = {"%d%" : rename_date_created, "%m%" : rename_date_modified}
+blacklist_functions = {1 : file_only_blacklist, 2 : filetype_only_blacklist, 3 : file_filetype_blacklist}
+
+
 
 #***************** get the path to file folder sort by modified time *************. 
 while True:
-    InputFile = input("Paste path to file\n")
-    search = InputFile
-    try:
-        with cd(search):
-            #os.chdir(search)
-            files = filter(os.path.isfile, os.listdir(search))
+    directory_path = input("Paste path to file\n")
+
+    if os.path.exists(directory_path):
+        with cd(directory_path):
+            files = filter(os.path.isfile, os.listdir(directory_path))
             files = list(files)
-            files.sort(key=lambda x: os.path.getmtime(x))
-            search = files
+            files.sort(key= natural_keys)
         break
-    except:
-        print("path not found \n")
+    else:
+        print("\nPath does not exist\n")
 
 
 #***************** display a small view of whats in the file folder *************. 
-if len(search) > 3:
-    #print('\n')
-    for i in range(0,3 ):
-        print(search[i])
-        if i == 2:
-            print("ect... \n")
-elif len(search) != 0:
-    #print('\n')
-    for i in range(0, len(search)):
-        print(search[i])
-        if i ==  len(search):
-            print("ect... \n")
-
-
-#***************** ask if they want to rename by date created instead of choosing a name *************. 
-rename_by_crtdate = ""
-while rename_by_crtdate != "y" or rename_by_crtdate != "n":
-    rename_by_crtdate = input("would you like to rename the files using the date created? y/n \n")
-    if rename_by_crtdate == "y" or rename_by_crtdate == "n":
+print("\nFolder preview:")
+for index in range(0, len(files)):
+    if index == 3:
+        print("\t", "{}".format(files[index]))
+        print("\t",len(files) - 4, "more files\n")
         break
-if rename_by_crtdate == "y":
-    while True:
-        mdfdate = input("If these files were copied the creation date may have been changed, would you like to use the Last Modified time instead? y/n \n")
-        if mdfdate == "y" or mdfdate == "n": break
-    if mdfdate == "y":
-        mdfdate_rename = True
-        crtdate_rename = True
     else:
-        crtdate_rename = True
-        mdfdate_rename = False
-    RenameName = ""
-else:
-    RenameName = input('Rename all as?\n')
-    crtdate_rename = False
-
+        if files[index] == files[-1]:
+            print("\t", "{}\n".format(files[index]))
+        else:
+            print("\t", files[index])
 
 #***************** ask if there are any files they do not want to rename *************. 
-BlacklistAsk = input("If you would like to blacklist any files, type the filename seperated by \" $$$ \" (ex text.txt $$$ text2.txt $$$ cat.png)\n")
-if BlacklistAsk.find(" $$$ ") > 0:
-    Blacklist = BlacklistAsk.split(" $$$ ")
-    Blacklist = [x.strip(' ') for x in Blacklist]
-else:
-    if len(BlacklistAsk) != 0:
-        Blacklist = []
-        Blacklist.append(BlacklistAsk.strip(' '))
-    else:
-        Blacklist = []
 
-#***************** ask if there are any files types do not want to rename *************. 
-BlacklistAsk1 = input("If you would like to blacklist any file types, type the filetype seperated by \" $$$ \" (ex .txt $$$ .png $$$ .jpg)\n")
-if BlacklistAsk1.find(" $$$ ") > 0:
-    Blacklistfile = BlacklistAsk1.split(" $$$ ")
-    Blacklistfile = [x.strip(' ') for x in Blacklistfile]
-else:
-    if len(BlacklistAsk1) != 0:
-        Blacklistfile = []
-        Blacklistfile.append(BlacklistAsk1.strip(' '))
-    else:
-        Blacklistfile = []
+try:
+    blacklist = int(input("\nWould you like to blacklist any files or filetypes? \n\tNone : 0\n\tFiles : 1\n\tFiletype : 2\n\tBoth : 3\n"))
+    blacklist = blacklist_functions.get(blacklist, [])
+    blacklists = {"files" : [], "file types" : []}
 
-#print(Blacklistfile)
+    if blacklist != []: 
+        blacklists["files"], blacklists["file types"] = blacklist() 
+except:
+    blacklists = {"files" : [], "file types" : []}
+
+print(blacklists, "\n")
+rename_as = input("Raname all as? (%d% to raname as date created, %m% to rename as date modified)\n")
+
+
 #***************** main loop *************. 
-Number = 0
-Count = 0
-FiletypeCount = 0
-check_for_datechange = []
-check_for_datechange.append('')
+offset = 0
+rename_count = 0
 start = time.perf_counter()
-for img in search:
-    filetype = "." + str(img).split(".")[-1:][0] # Grab the file type
-    if filetype not in Blacklistfile:
-        if img not in Blacklist:
-            try:
-                if crtdate_rename == True:
-                    if mdfdate_rename == True:
-                        created= os.stat("{}\\{}".format(InputFile, img)).st_mtime
-                    else:
-                        created= os.stat("{}\\{}".format(InputFile, img)).st_ctime
-                    timestamp = datetime.datetime.fromtimestamp(created)
-                    RenameName = timestamp.strftime('%Y-%m-%d')
-                    check_for_datechange.append(RenameName)
-                    if len(check_for_datechange) > 2:
-                        check_for_datechange.pop(0)
-                    if str(check_for_datechange[0]) != str(RenameName):
-                        Number = 0
-                try:
-                    os.rename("{}\\{}".format(InputFile, img), "{}\\{}_{}{}".format(InputFile, RenameName, Number, filetype))
-                    print("Renaming {}\\{}".format(InputFile, img),"as --> {}\\{}_{}{}".format(InputFile, RenameName, Number, filetype) )
-                    Number += 1
-                    Count += 1
-                except Exception as e:
-                    print(e)
-                    
-            except FileExistsError:
-                search.pop(search.index(img))
-                search.append(img)
-                Count -= 1
-        else:
-            print(img,"was blacklisted")
+
+for file in files:
+    file_type = f".{file.split('.')[-1]}"
+
+    if file_type in blacklists["file types"] or file in blacklists["files"]:
+        print(f"{file} was blacklisted") 
     else:
-        print(img,"was blacklisted")
-if Count <= 0:
-    print("Nothing has been renamed")
-elif crtdate_rename == True:
-    print('Renamed {} files as CreationDate_x'.format(Count))
+        output = rename_functins.get(rename_as, rename_as_provided)
+        while True:
+            try:
+                old_name, new_name = output(directory_path, file, f"{rename_as}_{offset}{file_type}")
+                if old_name == new_name: 
+                    offset += 1
+                    break
+                else:
+                    os.rename(old_name, new_name)
+                    offset += 1
+                    rename_count += 1
+                    print(f"Renaming {old_name}",f"as --> {new_name}")
+                break
+            except FileExistsError:                         # if file already exists generate a temp name for that file and rename it
+                files.remove(new_name.split("\\")[-1])
+                temp_name = str(random.randint(999, 99999)) + file_type 
+                while temp_name in files:
+                    temp_name = str(random.randint(0, 99999)) + file_type 
+                os.rename(new_name, directory_path + "\\" + temp_name)
+                files.append(temp_name)     
+                rename_count -= 1
+            except Exception as e:
+                print(e)
+                rename_count -= 1
+                break
+
+        
+
+if rename_count <= 0:
+    print("\nNothing has been renamed")
 else:
-    print('Renamed {} files as {}_x'.format(Count, RenameName))
+    print('\nRenamed {} files as {}_x'.format(rename_count, rename_as))
+
 finished = time.perf_counter()
-print(f"Finished in {round(finished - start, 4)} seconds")
+print(f"Finished in {round(finished - start, 5)} seconds")
 input('Press exit or enter to close')
