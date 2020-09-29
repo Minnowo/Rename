@@ -1,0 +1,23 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30011.22
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{888888A0-9F3D-457C-B088-3A5042F75D52}") = "FileRenamer", "FileRenamer.pyproj", "{BF91510B-054C-4F09-862F-4DA3CA593E7B}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{BF91510B-054C-4F09-862F-4DA3CA593E7B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BF91510B-054C-4F09-862F-4DA3CA593E7B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {1184CFD2-1A7E-4FD4-A1AE-95DE35EF8F4B}
+	EndGlobalSection
+EndGlobal
