@@ -40,13 +40,13 @@ def file_filetype_blacklist():
 
 def rename_date_created(dir, file, new_name):
     file = "\\".join([dir, file])
-    new_name = os.stat(file).st_ctime
+    new_name = "\\".join([dir, str(datetime.datetime.fromtimestamp(os.stat(file).st_ctime).strftime('%Y-%m-%d')) + "_" + new_name.split("_")[-1]])
     return file, new_name
     print(file)
 
 def rename_date_modified(dir, file, new_name):
     file = "\\".join([dir, file])
-    new_name = os.stat(file).st_mtime
+    new_name = "\\".join([dir, str(datetime.datetime.fromtimestamp(os.stat(file).st_mtime).strftime('%Y-%m-%d')) + "_" + new_name.split("_")[-1]])
     return file, new_name
     print(file)
 
@@ -92,7 +92,7 @@ for index in range(0, len(files)):
 #***************** ask if there are any files they do not want to rename *************. 
 
 try:
-    blacklist = int(input("\nWould you like to blacklist any files or filetypes? \n\tNone : 0\n\tFiles : 1\n\tFiletype : 2\n\tBoth : 3\n"))
+    blacklist = int(input("\nWould you like to blacklist any files or filetypes? \n\t0 : None\n\t1 : Files\n\t2 : Filetype\n\t3 : Both\n"))
     blacklist = blacklist_functions.get(blacklist, [])
     blacklists = {"files" : [], "file types" : []}
 
@@ -101,7 +101,7 @@ try:
 except:
     blacklists = {"files" : [], "file types" : []}
 
-print(blacklists, "\n")
+print("\nBlacklists: ", blacklists, "\n")
 rename_as = input("Raname all as? (%d% to raname as date created, %m% to rename as date modified)\n")
 
 
@@ -130,6 +130,7 @@ for file in files:
                     print(f"Renaming {old_name}",f"as --> {new_name}")
                 break
             except FileExistsError:                         # if file already exists generate a temp name for that file and rename it
+                print("file exists renaming it")
                 files.remove(new_name.split("\\")[-1])
                 temp_name = str(random.randint(999, 99999)) + file_type 
                 while temp_name in files:
