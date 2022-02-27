@@ -3,9 +3,57 @@ import random
 from re import compile, match
 from datetime import datetime
 
+WINDOWS = (os.name == "nt")
+
+# super long ugly multi-line message, so just putting it here as bytes to be decoded on run
+DATE_FORMAT_HELP_MESSAGE = b"\nCode  Example     Description\n%a    Sun         Weekday as locale's abbreviated name.\n%A    Sunday      Weekday as locale's full name.\n%w    0           Weekday as a decimal number, where 0 is Sunday and 6 is Saturday.\n%d    08          Day of the month as a zero-padded decimal number.\n%-d   8           Day of the month as a decimal number. (Platform specific)\n%b    Sep         Month as locale's abbreviated name.\n%B    September   Month as locale's full name.\n%m    09          Month as a zero-padded decimal number.\n%-m   9           Month as a decimal number. (Platform specific)\n%y    13          Year without century as a zero-padded decimal number.\n%Y    2013        Year with century as a decimal number.\n%H    07          Hour (24-hour clock) as a zero-padded decimal number.\n%-H   7           Hour (24-hour clock) as a decimal number. (Platform specific)\n%I    07          Hour (12-hour clock) as a zero-padded decimal number.\n%-I   7           Hour (12-hour clock) as a decimal number. (Platform specific)\n%p    AM          Locale's equivalent of either AM or PM.\n%M    06          Minute as a zero-padded decimal number.\n%-M   6           Minute as a decimal number. (Platform specific)\n%S    05          Second as a zero-padded decimal number.\n%-S   5           Second as a decimal number. (Platform specific)\n%f    000000      Microsecond as a decimal number, zero-padded on the left.\n%z    +0000       UTC offset in the form \xc2\xb1HHMM[SS[.ffffff]] (empty string if the object is naive).\n%Z    UTC         Time zone name (empty string if the object is naive).\n%j    251         Day of the year as a zero-padded decimal number.\n%-j   251         Day of the year as a decimal number. (Platform specific)\n%x    09/08/13    Locale's appropriate date representation.\n%X    07:06:05    Locale's appropriate time representation.\n%%    %           A literal '%' character.\n\n%U    36          Week number of the year (Sunday as the first day of the week) as a zero padded decimal number.\n                  All days in a new year preceding the first Sunday are considered to be in week 0.\n\n%W    35          Week number of the year (Monday as the first day of the week) as a decimal number.\n                  All days in a new year preceding the first Monday are considered to be in week 0.\n\n%c    Sun Sep 8 07:06:05 2013       Locale's appropriate date and time representation.".decode()
+
+# supported formats
+FORMAT_HELP_MESSAGE = """
+-- Formats --
+$[EXT]          : the files extension
+$[0:10]         : a digit that starts at 0 and increments by 1 until 10
+$[0:2:10]       : a digit that starts at 0 and increments by 2 until 10
+$[RND:0:999]    : a random number anywhere from 0-999
+$[FDM]          : the file date modified
+$[FDC]          : the file date created
+$[CD]           : the current date
+$[CD:%Y-%m-%d]  : specify a custom date format -> run --date-formats to see all of them
+"""
+
+DEFAULT_SEP = "|"
+
+DEFAULT_RN_FILE = ".rn"
+
+RESTRICT_MAP = {
+        "auto" : "\\\\|/<>:\"?*" if WINDOWS else "/",
+        "unix" : "/",
+        "windows" : "\\\\|/<>:\"?*",
+    }
+
+# removes invalid path characters
+RM_INVALID      = compile(f"[{RESTRICT_MAP['auto']}]").sub
+# what invalid path characters will become
+REPLACE_INVALID = "_"
+
+# console colors 
+HEADER    ="\033[95m"
+OKBLUE    ="\033[94m"
+OKCYAN    ="\033[96m"
+OKGREEN   ="\033[92m"
+WARNING   ="\033[93m"
+FAIL      ="\033[91m"
+ENDC      ="\033[0m"
+BOLD      ="\033[1m"
+UNDERLINE ="\033[4m"
+
+
+
 def natural_sort_key(s, _nsre=compile('([0-9]+)')):
     return [int(text) if text.isdigit() else text.lower()
             for text in _nsre.split(s)]
+
+
 
 def get_sep(string, *, throw_error = False, error = ""):
     """Get the separator character from a string -> sep=|"""
@@ -13,11 +61,13 @@ def get_sep(string, *, throw_error = False, error = ""):
     
     if _ == -1:
         if throw_error: raise Exception(error)
-        return "|"
+        return DEFAULT_SEP
 
     _ = string[_ + 1:] # take everything after the =
     _ = _[:-1]         # remove the last character of the string (assumes \n)
     return _
+
+
 
 def handle_undo(file : list):
     """Reads a list of [.rn] files and renames all existing files back to before being renamed for each file"""
@@ -25,56 +75,59 @@ def handle_undo(file : list):
 
     for f in file:
 
-        if os.path.exists(f):
+        if not os.path.exists(f):
+            continue
 
-            if os.path.isdir(f):
-                cwd = os.getcwd()
+        if os.path.isdir(f):
+            cwd = os.getcwd()
 
-                try:
-                    dir  = os.path.abspath(f) 
-                    os.chdir(dir)
-                    paths = filter(lambda x : x.endswith(".rn"), os.listdir()) # grab any .rn files 
+            try:
+                dir  = os.path.abspath(f) 
+                os.chdir(dir)
+                paths = filter(lambda x : x.endswith(".rn"), os.listdir()) # grab any .rn files 
 
-                finally:
-                    os.chdir(cwd)
+            finally:
+                os.chdir(cwd)
 
-            if os.path.isfile(f):
-                dir  = os.path.dirname(f) 
-                paths = [os.path.basename(f)]
+        if os.path.isfile(f):
+            dir  = os.path.dirname(f) 
+            paths = [os.path.basename(f)]
 
-            for rn in paths:
+        for rn in paths:
 
-                full_path = os.path.join(dir, rn)
-                print(full_path)
+            full_path = os.path.join(dir, rn)
+            print(full_path)
 
-                try:
-                    with open(full_path, "rb") as rn_file:
-                        _ = rn_file.readline().decode()
-                        sep = get_sep(_, throw_error=True, error="Invalid rn file cannot get separator")
+            try:
+                with open(full_path, "rb") as rn_file:
+                    _ = rn_file.readline().decode()
+                    sep = get_sep(_, throw_error=True, error="Invalid rn file cannot get separator")
+                    
+                    for line in rn_file:
                         
-                        for line in rn_file:
+                        lined = line.decode()
 
-                            lined = line.decode()
+                        if lined.startswith("ERROR" + sep):
+                            if lined.count(sep) != 2: # if there is an error there will be 3 occurance of sep
+                                continue
+                        
+                        old_n, _, new_n = lined.partition(sep)
 
-                            if lined.startswith("ERROR" + sep):
-                                if lined.count(sep) != 2: # if there is an error there will be 3 occurance of sep
-                                    continue
-                            
-                            old_n, _, new_n = lined.partition(sep)
+                        old_path = os.path.join(dir, old_n)
+                        new_path = os.path.join(dir, new_n[:-1])
 
-                            old_path = os.path.join(dir, old_n)
-                            new_path = os.path.join(dir, new_n[:-1])
+                        if os.path.exists(new_path):
+                            os.rename(new_path, old_path)
+                            print(f"   {new_n.rstrip()} {sep} {old_n.rstrip()}")
 
-                            if os.path.exists(new_path):
-                                os.rename(new_path, old_path)
-                                print(f"   {new_n.rstrip()} {sep} {old_n.rstrip()}")
-
-                except Exception as e:
-                    print(e) 
-                    continue
-                
+            except Exception as e:
+                print(e) 
+                continue
+            
     
     os.chdir(cwd)
+
+
 
 def get_parser():
     import argparse
@@ -114,17 +167,17 @@ def get_parser():
     )
     rename.add_argument(
         "-sw", "--start-with",
-        dest="start_with", metavar="STR", action="append",
+        dest="start_with", metavar="STR", action="append", default=[],
         help="Only rename files that start with the given string (multiple --start-with can be specified)"
     )
     rename.add_argument(
         "-ew", "--ends-with",
-        dest="ends_with", metavar="STR", action="append",
+        dest="ends_with", metavar="STR", action="append",  default=[],
         help="Only rename files that end with the given string (multiple --ends-with can be specified)"
     )
     rename.add_argument(
         "-m", "--match",
-        dest="matches", metavar="REGEX", action="append",
+        dest="matches", metavar="REGEX", action="append",  default=[],
         help="Only rename if the filename matches any of the given regex"
     )
     
@@ -153,11 +206,12 @@ def get_parser():
     )
     parser.add_argument(
         "-s", "--sep",
-        dest="sep", metavar="SEP", 
+        dest="sep", metavar="SEP", default=DEFAULT_SEP,
         help=".rn file sep char"
     )
 
     return parser
+
 
 
 class Renamer:
@@ -193,6 +247,7 @@ class Renamer:
 
         self.logger = None
         self.sep = sep
+        self.pad = 50
 
         if no_log:
             return
@@ -226,14 +281,21 @@ class Renamer:
 
     def rename(self, file_name, new_name):
 
+        print('   {0:<{1}} '.format(file_name, self.pad), end="")
+
         try:
             os.rename(os.path.join(self.directory, file_name), os.path.join(self.directory, new_name))
-            print(f"   {file_name} {self.sep} {new_name}")
+
             self.log(f"{file_name}{self.sep}{new_name}\n".encode())
-        except:
-            print(f"ERROR   {file_name} {self.sep} {new_name}") 
+
+            print('{0}-->{2} {1}'.format(OKGREEN, new_name, ENDC))
+
+        except Exception as e:
             self.log(f"ERROR|{file_name}{self.sep}{new_name}\n".encode())
             
+            print("{0}-->{2} {1}".format(FAIL, getattr(e, 'message', repr(e)), ENDC)) 
+            
+
 
 class DigitTemplateGenerator:
     """A class that returns a template string formatted with digits
@@ -323,14 +385,31 @@ class DigitTemplateGenerator:
 
 class TextFormatter:
 
-    def __init__(self, template) -> None:
-        self.template = template
+    RE_EXT     = compile(r"\$\[EXT\]")                # repalce file extension
+    RE_RAND    = compile(r"\$\[RND\:(\d+)\:(\d+)\]")  # random number
+
+    def __init__(self) -> None:
+        self.file_ext = ""
 
     def add_context(self, context):
-        pass 
+
+        ext = context.rsplit(".", 1)
+
+        if len(ext) > 1:
+            self.file_ext = ext[-1]
+
+        else:
+            self.file_ext = ""
 
     def format_text(self, text):
-        pass 
+
+        text = self.RE_EXT.sub(self.file_ext, text)  
+
+        # random number
+        for i in self.RE_RAND.findall(text):
+            text = self.RE_RAND.sub(str(random.randint(int(i[0]), int(i[1]))), text, 1)
+
+        return text 
 
 
 class DateFormatter(TextFormatter):
@@ -348,15 +427,9 @@ class DateFormatter(TextFormatter):
     # matches $[FDC: 'anything that is not [ or ]' ]
     MATCH_CUSTOM_DATE = compile(r"\$\[(FDM|FDC|CD):([^\]]+)\]")      
 
-    def __init__(self, template, *, default_date_format = "%Y-%m-%d", require_file_exist = True) -> None:
+    def __init__(self, *, default_date_format = "%Y-%m-%d", require_file_exist = True) -> None:
         
-        TextFormatter.__init__(self, template)
-
-        # simple date sub will just sub everything and there is only 2 options so just remove duplicates
-        self.simple_date_format = set(self.MATCH_SIMPLE_DATE.findall(template))
-
-        # list of tuple -> (DM / DC, custom date format)
-        self.custom_date_format = self.MATCH_CUSTOM_DATE.findall(template)
+        TextFormatter.__init__(self)
 
         self.file_name = ""
 
@@ -368,9 +441,9 @@ class DateFormatter(TextFormatter):
         
         self.file_name = context
 
-    def format_text(self, templage):
+    def format_text(self, template):
 
-        name = templage
+        name = template
         file_date_created = 0
         file_date_modified = 0
 
@@ -381,7 +454,7 @@ class DateFormatter(TextFormatter):
         elif self.require_file_exist:
             raise Exception("DateFormatter.get_formatted_text -> given file does not exist, requires the file exists")
             
-        for i in self.simple_date_format:
+        for i in set(self.MATCH_SIMPLE_DATE.findall(template)):
 
             if i == "FDM":
                 name = self.SUB_MAP[i](datetime.fromtimestamp(file_date_modified).strftime(self.date_format), name)
@@ -393,7 +466,7 @@ class DateFormatter(TextFormatter):
                 name = self.SUB_MAP[i](datetime.fromtimestamp(datetime.now().timestamp()).strftime(self.date_format), name)
 
 
-        for i in self.custom_date_format:
+        for i in self.MATCH_CUSTOM_DATE.findall(template):
 
             if i[0] == "FDM":
                 name = self.MATCH_CUSTOM_DATE.sub(datetime.fromtimestamp(file_date_modified).strftime(i[1]), name, 1)
@@ -406,61 +479,27 @@ class DateFormatter(TextFormatter):
         
         return name
 
+
+
+
+
+
+
+
+
+
+
 def main():
 
     parser = get_parser()
     args = parser.parse_args()
 
     if args.display_formats:
-        print("-- Formats --")
-        print("$[EXT]          : the files extension") 
-        print("$[0:10]         : a digit that starts at 0 and increments by 1 until 10")
-        print("$[0:2:10]       : a digit that starts at 0 and increments by 2 until 10")
-        print("$[RND:0:999]    : a random number anywhere from 0-999")
-        print("$[FDM]          : the date modified")   
-        print("$[FDC]          : the date created")   
-        print(r"$[CD:%Y-%m-%d] : specify a custom date format -> run --date-formats to see all of them")
+        print(FORMAT_HELP_MESSAGE)
         return
 
     if args.custom_date_formats:
-        print("""
-Code  Example     Description
-%a    Sun         Weekday as locale's abbreviated name.
-%A    Sunday      Weekday as locale's full name.
-%w    0           Weekday as a decimal number, where 0 is Sunday and 6 is Saturday.
-%d    08          Day of the month as a zero-padded decimal number.
-%-d   8           Day of the month as a decimal number. (Platform specific)
-%b    Sep         Month as locale's abbreviated name.
-%B    September   Month as locale's full name.
-%m    09          Month as a zero-padded decimal number.
-%-m   9           Month as a decimal number. (Platform specific)
-%y    13          Year without century as a zero-padded decimal number.
-%Y    2013        Year with century as a decimal number.
-%H    07          Hour (24-hour clock) as a zero-padded decimal number.
-%-H   7           Hour (24-hour clock) as a decimal number. (Platform specific)
-%I    07          Hour (12-hour clock) as a zero-padded decimal number.
-%-I   7           Hour (12-hour clock) as a decimal number. (Platform specific)
-%p    AM          Locale's equivalent of either AM or PM.
-%M    06          Minute as a zero-padded decimal number.
-%-M   6           Minute as a decimal number. (Platform specific)
-%S    05          Second as a zero-padded decimal number.
-%-S   5           Second as a decimal number. (Platform specific)
-%f    000000      Microsecond as a decimal number, zero-padded on the left.
-%z    +0000       UTC offset in the form ±HHMM[SS[.ffffff]] (empty string if the object is naive).
-%Z    UTC         Time zone name (empty string if the object is naive).
-%j    251         Day of the year as a zero-padded decimal number.
-%-j   251         Day of the year as a decimal number. (Platform specific)
-%x    09/08/13    Locale's appropriate date representation.
-%X    07:06:05    Locale's appropriate time representation.
-%%    %           A literal '%' character.
-
-%U    36          Week number of the year (Sunday as the first day of the week) as a zero padded decimal number.
-                  All days in a new year preceding the first Sunday are considered to be in week 0.
-
-%W    35          Week number of the year (Monday as the first day of the week) as a decimal number.
-                  All days in a new year preceding the first Monday are considered to be in week 0.
-
-%c    Sun Sep 8 07:06:05 2013       Locale's appropriate date and time representation.""")
+        print(DATE_FORMAT_HELP_MESSAGE)
         return 
 
     if args.undo_file:
@@ -475,11 +514,25 @@ Code  Example     Description
         print("No output format or replace specified use -f \"FORMAT\" to specify a format --format-help for more info\nor -r 'word:replacement' to replace words")
         return
 
-    # sub functions
-    RE_SUB_EXT    = compile(r"\$\[EXT\]").sub  # repalce file extension
-    MATCH_RAND    = compile(r"\$\[RND\:(\d+)\:(\d+)\]")
-
+    
     _replace = {} 
+    _format  = args.format
+
+    # filters 
+    _ends_with   = args.ends_with
+    _starts_with = args.start_with
+    _regex       = args.matches
+
+    # rename instance args 
+    _no_log             = args.no_rn_file
+    _sep                = args.sep
+    _overwrite_existing = not args.append_rn_data
+
+    # directories to rename
+    _directories = set()
+
+
+
     if args.replace:                  # replace specified
 
         for i in args.replace:        # go through all given strings
@@ -489,96 +542,102 @@ Code  Example     Description
             if len(_) == 2:           # if there is not 2 items skip
                 _replace[_[0]] = _[1] # set dict 
 
-    if not args.start_with:
-        args.start_with = []
 
-    if not args.ends_with:
-        args.ends_with = []
-
-    if args.format:
-        
-        digit_formatter = DigitTemplateGenerator(args.format)
-        date_formatter  = DateFormatter(args.format)
-        
-        def format_func(text : str):
-             # get the file extension
-            ext = text.rsplit(".", 1)
-            ext = ext[-1] if len(ext) > 1 else ""
-
-            name = digit_formatter.get_next_string()
-            date_formatter.add_context(text)
-            name = date_formatter.format_text(name)
-
-            for i in MATCH_RAND.findall(name):
-                name = MATCH_RAND.sub(str(random.randint(int(i[0]), int(i[1]))), name, 1)
-            # name = RE_SUB_RAND(random.ra)
-            # replace the $[EXT] with the file extension 
-            name = RE_SUB_EXT(ext, name) 
-            return name
-
-    else:
-        
-        def format_func(text : str):
-            for key, value in _replace.items():
-                text = text.replace(key, value)
-
-            return text 
-    
-
-    items  = {"directories" : set(), "files" : set()}
 
     for i in args.inputs:
 
-        if os.path.exists(i):
-            if os.path.isdir(i):
-                items["directories"].add(os.path.abspath(i))
+        if not os.path.exists(i):
+            continue
 
-            elif os.path.isfile(i):
-                items["files"].add(os.path.abspath(i))
+        if os.path.isdir(i):
+            _directories.add(os.path.abspath(i))
 
-    for dir in items["directories"]:
 
-        renamer = Renamer(dir, ".rn", 
-            sep = args.sep or "|",
-            overwrite_existing = not args.append_rn_data, 
-            no_log = args.no_rn_file)
+    
+    standard_format = TextFormatter()
+    date_format     = DateFormatter()
+    digit_format    = DigitTemplateGenerator(_format)
+    
+    cwd = os.getcwd()
 
-        # remember the starting directory
-        cwd = os.getcwd()
+    for dir in _directories:
+
+        renamer = Renamer(dir, DEFAULT_RN_FILE, 
+                          sep = _sep,
+                          overwrite_existing = _overwrite_existing, 
+                          no_log = _no_log)
+
+        digit_format.reset()
+
+        print("{0}{1}:{2}".format(WARNING, dir, ENDC))
+
         try:
+            os.chdir(dir)
 
-            os.chdir(dir)              # change into the target directory
+            files = sorted(os.listdir(dir), key=natural_sort_key)
 
-            for root, dirs, files in os.walk(dir):                  # get directories
-                for file in sorted(files, key=natural_sort_key): # get all files naturally sorted
-                    
-                    if file == ".rn" :
+            renamer.pad = len(max(files, key=len))
+
+            for file in files:
+
+                if not os.path.isfile(file):
+                    continue
+
+                if file == DEFAULT_RN_FILE:
+                    continue
+
+                if _regex:
+                    if not any(match(regex, file) for regex in _regex):
                         continue
-                    
-                    # if the filename does not match any of the regex skip
-                    if args.matches:
-                        if not any(match(regex, file) for regex in args.matches):
-                            continue
-                    
-                    # if the filename does not startwith any of the given strings skip
-                    if any([not file.startswith(i) for i in args.start_with]):
+                
+                if _starts_with:
+                    if not any([file.startswith(i) for i in _starts_with]):
                         continue
-
-                    # if the filename does not endwith and of the given strings skip
-                    if any([not file.endswith(i) for i in args.ends_with]):
+                
+                if _ends_with:
+                    if not any([file.endswith(i) for i in _ends_with]):
                         continue
+                
+                n_file = file
 
-                    name = format_func(file)
+                if _format:
 
-                    renamer.rename(file, name)
+                    n_file = digit_format.get_next_string()
 
-                break # only want the top level directories files
+                    date_format.add_context(file)
+                    n_file = date_format.format_text(n_file)
+
+                    standard_format.add_context(file)
+                    n_file = standard_format.format_text(n_file)
+
+
+                if _replace:
+
+                    for key, value in _replace.items():
+                    
+                        n_file = n_file.replace(key, value)
+
+
+                n_file = RM_INVALID(REPLACE_INVALID, n_file)
+
+                renamer.rename(file, n_file)
+
+
+        except OSError as e:
+            pass 
 
         finally:
             os.chdir(cwd)
 
-        # close our log file
-        renamer.close()
+            # close our log file
+            renamer.close()
+
+
+
+
+
+
 
 if __name__ == "__main__":
+    os.system("") # console color on windows
     main()
