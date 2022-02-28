@@ -79,8 +79,6 @@ def handle_undo(file : list):
             continue
 
         if os.path.isdir(f):
-            cwd = os.getcwd()
-
             try:
                 dir  = os.path.abspath(f) 
                 os.chdir(dir)
@@ -95,13 +93,18 @@ def handle_undo(file : list):
 
         for rn in paths:
 
+            renamer = Renamer(DEFAULT_RN_FILE, no_log = True)
+
             full_path = os.path.join(dir, rn)
-            print(full_path)
+
+            print("{0}{1}:{2}".format(WARNING, full_path, ENDC))
 
             try:
+                os.chdir(dir)
+
                 with open(full_path, "rb") as rn_file:
                     _ = rn_file.readline().decode()
-                    sep = get_sep(_, throw_error=True, error="Invalid rn file cannot get separator")
+                    sep = get_sep(_, throw_error=True, error="Invalid .rn file cannot get separator")
                     
                     for line in rn_file:
                         
@@ -113,17 +116,16 @@ def handle_undo(file : list):
                         
                         old_n, _, new_n = lined.partition(sep)
 
-                        old_path = os.path.join(dir, old_n)
-                        new_path = os.path.join(dir, new_n[:-1])
+                        new_path =  new_n[:-1]
 
                         if os.path.exists(new_path):
-                            os.rename(new_path, old_path)
-                            print(f"   {new_n.rstrip()} {sep} {old_n.rstrip()}")
+                            renamer.rename(new_path, old_n)
 
             except Exception as e:
-                print(e) 
-                continue
+                print(FAIL, getattr(e, 'message', repr(e)), ENDC)
             
+            finally:
+                os.chdir(cwd)
     
     os.chdir(cwd)
 
@@ -165,24 +167,27 @@ def get_parser():
         dest="undo_file", metavar="FILE", action="append",
         help="Undo any renaming done using the provided .rn file"
     )
-    rename.add_argument(
+
+
+    filter_ops = parser.add_argument_group("Filter Options")
+    filter_ops.add_argument(
         "-sw", "--start-with",
         dest="start_with", metavar="STR", action="append", default=[],
         help="Only rename files that start with the given string (multiple --start-with can be specified)"
     )
-    rename.add_argument(
+    filter_ops.add_argument(
         "-ew", "--ends-with",
         dest="ends_with", metavar="STR", action="append",  default=[],
         help="Only rename files that end with the given string (multiple --ends-with can be specified)"
     )
-    rename.add_argument(
+    filter_ops.add_argument(
         "-m", "--match",
         dest="matches", metavar="REGEX", action="append",  default=[],
         help="Only rename if the filename matches any of the given regex"
     )
     
 
-    after_rename = parser.add_argument_group("Other Options")
+    after_rename = parser.add_argument_group("Undo File Options")
     after_rename.add_argument(
         "--no-file",
         dest="no_rn_file", action="store_true",
@@ -191,24 +196,26 @@ def get_parser():
     after_rename.add_argument(
         "-a", "--append-rn",
         dest="append_rn_data", action="store_true",
-        help="Should .rn file data be written to any existing rn files"
+        help="Should file rename history be appended to existing .rn file"
     )
-    
-    parser.add_argument(
+    after_rename.add_argument(
+        "-s", "--sep",
+        dest="sep", metavar="SEP", default=DEFAULT_SEP,
+        help="The separator character used in the .rn file"
+    )
+
+    help_options = parser.add_argument_group("Format Help")
+    help_options.add_argument(
         "--date-formats",
         dest="custom_date_formats", action="store_true",
         help="Show all custom date formats"
     )
-    parser.add_argument(
+    help_options.add_argument(
         "--format-help",
         dest="display_formats", action="store_true",
-        help="List renaming formats and exit"
+        help="Show format string variables"
     )
-    parser.add_argument(
-        "-s", "--sep",
-        dest="sep", metavar="SEP", default=DEFAULT_SEP,
-        help=".rn file sep char"
-    )
+    
 
     return parser
 
@@ -240,9 +247,8 @@ class Renamer:
         close() : closes the log file
 
     """
-    def __init__(self, directory, log_file, *, sep = "|", overwrite_existing = True, no_log = False) -> None:
+    def __init__(self, log_file, *, sep = "|", overwrite_existing = True, no_log = False) -> None:
         
-        self.directory = directory
         self.log_file_name = log_file
 
         self.logger = None
@@ -253,7 +259,7 @@ class Renamer:
             return
 
         # get the path to the rn file
-        _ = os.path.join(directory, log_file)
+        _ = log_file
 
         # if file exists, and the user wants to append logs to existing .rn file, 
         # read the file and get the separator character,
@@ -284,7 +290,7 @@ class Renamer:
         print('   {0:<{1}} '.format(file_name, self.pad), end="")
 
         try:
-            os.rename(os.path.join(self.directory, file_name), os.path.join(self.directory, new_name))
+            os.rename(file_name, new_name)
 
             self.log(f"{file_name}{self.sep}{new_name}\n".encode())
 
@@ -295,7 +301,6 @@ class Renamer:
             
             print("{0}-->{2} {1}".format(FAIL, getattr(e, 'message', repr(e)), ENDC)) 
             
-
 
 class DigitTemplateGenerator:
     """A class that returns a template string formatted with digits
@@ -482,13 +487,6 @@ class DateFormatter(TextFormatter):
 
 
 
-
-
-
-
-
-
-
 def main():
 
     parser = get_parser()
@@ -562,7 +560,7 @@ def main():
 
     for dir in _directories:
 
-        renamer = Renamer(dir, DEFAULT_RN_FILE, 
+        renamer = Renamer(os.path.join(dir, DEFAULT_RN_FILE), 
                           sep = _sep,
                           overwrite_existing = _overwrite_existing, 
                           no_log = _no_log)
